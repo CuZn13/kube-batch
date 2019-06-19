@@ -131,12 +131,13 @@ func (alloc *groupAllocAction) Execute(ssn *framework.Session) {
 		if !tasks.Empty(){
 			task := tasks.Pop().(*api.TaskInfo)
 			predicateNodes := util.PredicateNodes(task, allNodes, predicateFn)
-			glog.V(3).Infof("predicateNodes size : %d",len(predicateNodes))
+			glog.V(4).Infof("predicateNodes size : %d",len(predicateNodes))
 			if len(predicateNodes) == 0 {
 				break
 			}
 			var err error
 			priorityList, err = util.PrioritizeNodes(task, predicateNodes, ssn.NodePrioritizers())
+			glog.V(4).Infof("priorityList size : %d",len(priorityList))
 			if err != nil {
 				glog.Errorf("Prioritize Nodes for task %s err: %v", task.UID, err)
 				break
@@ -155,7 +156,7 @@ func (alloc *groupAllocAction) Execute(ssn *framework.Session) {
 			if len(job.NodesFitDelta) > 0 {
 				job.NodesFitDelta = make(api.NodeResourceMap)
 			}
-
+			glog.V(4).Infof("priorityList[i].Host : %v",priorityList[i].Host)
 			node := ssn.Nodes[priorityList[i].Host]
 			i=i+1
 			// Allocate idle resource to the task.
