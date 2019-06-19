@@ -126,36 +126,34 @@ func (alloc *groupAllocAction) Execute(ssn *framework.Session) {
 		glog.V(3).Infof("Try to allocate resource to %d tasks of Job <%v/%v>",
 			tasks.Len(), job.Namespace, job.Name)
 
-		var predicateNodes []*api.NodeInfo
-		var i = int32(0)
+		var priorityList util.HostPriorityList
+		var i = int(0)
+		if !tasks.Empty(){
+			task := tasks.Pop().(*api.TaskInfo)
+			predicateNodes := util.PredicateNodes(task, allNodes, predicateFn)
+			glog.V(3).Infof("predicateNodes size : %d",len(predicateNodes))
+			if len(predicateNodes) == 0 {
+				break
+			}
+			var err error
+			priorityList, err = util.PrioritizeNodes(task, predicateNodes, ssn.NodePrioritizers())
+			if err != nil {
+				glog.Errorf("Prioritize Nodes for task %s err: %v", task.UID, err)
+				break
+			}
+			tasks.Push(task)
+		}
 		for !tasks.Empty() {
 			task := tasks.Pop().(*api.TaskInfo)
 
-			glog.V(3).Infof("There are <%d> nodes for Job <%v/%v>",
+			glog.V(4).Infof("There are <%d> nodes for Job <%v/%v>",
 				len(ssn.Nodes), job.Namespace, job.Name)
 
 			if len(job.NodesFitDelta) > 0 {
 				job.NodesFitDelta = make(api.NodeResourceMap)
 			}
 
-			if len(predicateNodes) == 0 {
-				glog.V(3).Infof("frist get Nodes with pod %v",job.Name)
-				predicateNodes = util.PredicateNodes(task, allNodes, predicateFn)
-				glog.V(3).Infof("predicateNodes size : %d",len(predicateNodes))
-			}
-			if len(predicateNodes) == 0 {
-				break
-			}
-
-			//priorityList, err := util.PrioritizeNodes(task, predicateNodes, ssn.NodePrioritizers())
-			//if err != nil {
-			//	glog.Errorf("Prioritize Nodes for task %s err: %v", task.UID, err)
-			//	break
-			//}
-			//
-			//nodeName := util.SelectBestNode(priorityList)
-
-			node := ssn.Nodes[predicateNodes[i].Name]
+			node := ssn.Nodes[priorityList[i].Host]
 			i=i+1
 			// Allocate idle resource to the task.
 			if task.InitResreq.LessEqual(node.Idle) {
@@ -182,8 +180,7 @@ func (alloc *groupAllocAction) Execute(ssn *framework.Session) {
 					}
 				}
 			}
-
-			if ssn.JobReady(job) {
+			if len(priorityList) <= i && ssn.JobReady(job) {
 				jobs.Push(job)
 				break
 			}
