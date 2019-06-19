@@ -126,36 +126,37 @@ func (alloc *groupAllocAction) Execute(ssn *framework.Session) {
 		glog.V(3).Infof("Try to allocate resource to %d tasks of Job <%v/%v>",
 			tasks.Len(), job.Namespace, job.Name)
 
+		var predicateNodes []*api.NodeInfo
+		var i = int32(0)
 		for !tasks.Empty() {
 			task := tasks.Pop().(*api.TaskInfo)
 
 			glog.V(3).Infof("There are <%d> nodes for Job <%v/%v>",
 				len(ssn.Nodes), job.Namespace, job.Name)
 
-			//any task that doesn't fit will be the last processed
-			//within this loop context so any existing contents of
-			//NodesFitDelta are for tasks that eventually did fit on a
-			//node
 			if len(job.NodesFitDelta) > 0 {
 				job.NodesFitDelta = make(api.NodeResourceMap)
 			}
 
-			predicateNodes := util.PredicateNodes(task, allNodes, predicateFn)
 			if len(predicateNodes) == 0 {
-				// Further Tasks should be checked because tasks are ordered in priority, so it affects taskPriority within Job,
-				// so if one task fails predicates, it should not check further tasks in same job, should skip to next job.
+				glog.V(3).Infof("frist get Nodes with pod %v",job.Name)
+				predicateNodes = util.PredicateNodes(task, allNodes, predicateFn)
+				glog.V(3).Infof("predicateNodes size : %d",len(predicateNodes))
+			}
+			if len(predicateNodes) == 0 {
 				break
 			}
 
-			priorityList, err := util.PrioritizeNodes(task, predicateNodes, ssn.NodePrioritizers())
-			if err != nil {
-				glog.Errorf("Prioritize Nodes for task %s err: %v", task.UID, err)
-				break
-			}
+			//priorityList, err := util.PrioritizeNodes(task, predicateNodes, ssn.NodePrioritizers())
+			//if err != nil {
+			//	glog.Errorf("Prioritize Nodes for task %s err: %v", task.UID, err)
+			//	break
+			//}
+			//
+			//nodeName := util.SelectBestNode(priorityList)
 
-			nodeName := util.SelectBestNode(priorityList)
-			node := ssn.Nodes[nodeName]
-
+			node := ssn.Nodes[predicateNodes[i].Name]
+			i=i+1
 			// Allocate idle resource to the task.
 			if task.InitResreq.LessEqual(node.Idle) {
 				glog.V(3).Infof("Binding Task <%v/%v> to node <%v>",
