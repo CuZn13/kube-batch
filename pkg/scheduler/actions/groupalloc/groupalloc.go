@@ -184,7 +184,11 @@ func (alloc *groupAllocAction) Execute(ssn *framework.Session) {
 					}
 				}
 			}
-			if len(priorityList) <= i && ssn.JobReady(job) {
+			if len(priorityList) <= i  {
+				jobs.Push(job)
+				break
+			}
+			if ssn.JobReady(job){
 				jobs.Push(job)
 				break
 			}
