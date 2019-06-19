@@ -10,7 +10,7 @@ LD_FLAGS=" \
     -X '${REPO_PATH}/pkg/version.Version=${RELEASE_VER}'"
 
 kube-batch: init
-	go build -ldflags ${LD_FLAGS} -o=${BIN_DIR}/kube-batch ./cmd/kube-batch
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags ${LD_FLAGS} -o=${BIN_DIR}/kube-batch ./cmd/kube-batch
 
 verify: generate-code
 	hack/verify-gofmt.sh
