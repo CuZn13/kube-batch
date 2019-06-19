@@ -141,6 +141,9 @@ func (alloc *groupAllocAction) Execute(ssn *framework.Session) {
 				glog.Errorf("Prioritize Nodes for task %s err: %v", task.UID, err)
 				break
 			}
+			if len(priorityList) == 0 {
+				break
+			}
 			tasks.Push(task)
 		}
 		for !tasks.Empty() {
