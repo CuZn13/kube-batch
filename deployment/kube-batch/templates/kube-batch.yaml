@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-batch
+  labels:
+    chart: kube-batch-0.4.2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-batch
+  template:
+    metadata:
+      labels:
+        app: kube-batch
+    spec:
+      containers:
+      - name: kube-batch
+        image: cuzn13/kube-batch:v0.4.2
+        args: ["--logtostderr", "--v", "3","--master","https://10.96.0.1:443"]
+        imagePullPolicy: IfNotPresent
+        resources:
+          limits:
+            cpu: 2000m
+            memory: 2048Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+

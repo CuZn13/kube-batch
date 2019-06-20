@@ -6,6 +6,7 @@ metadata:
     "helm.sh/hook": "crd-install"
 spec:
   group: scheduling.incubator.k8s.io
+  version: v1alpha1
   names:
     kind: PodGroup
     plural: podgroups
@@ -42,4 +43,4 @@ spec:
               type: integer
           type: object
       type: object
-  version: v1alpha1
+
