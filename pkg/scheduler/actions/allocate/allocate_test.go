@@ -17,11 +17,10 @@ limitations under the License.
 package allocate
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 
@@ -33,11 +32,15 @@ import (
 	"github.com/kubernetes-sigs/kube-batch/pkg/scheduler/plugins/drf"
 	"github.com/kubernetes-sigs/kube-batch/pkg/scheduler/plugins/proportion"
 	"github.com/kubernetes-sigs/kube-batch/pkg/scheduler/util"
+	"strconv"
+	"github.com/kubernetes-sigs/kube-batch/pkg/scheduler/plugins/gang"
+	"github.com/golang/glog"
 )
 
 func TestAllocate(t *testing.T) {
 	framework.RegisterPluginBuilder("drf", drf.New)
 	framework.RegisterPluginBuilder("proportion", proportion.New)
+	framework.RegisterPluginBuilder("gang", gang.New)
 	defer framework.CleanupPluginBuilders()
 
 	tests := []struct {
@@ -58,6 +61,7 @@ func TestAllocate(t *testing.T) {
 					},
 					Spec: kbv1.PodGroupSpec{
 						Queue: "c1",
+						MinMember:10,
 					},
 				},
 			},
@@ -83,65 +87,65 @@ func TestAllocate(t *testing.T) {
 				"c1/p2": "n1",
 			},
 		},
-		{
-			name: "two Jobs on one node",
-			podGroups: []*kbv1.PodGroup{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "pg1",
-						Namespace: "c1",
-					},
-					Spec: kbv1.PodGroupSpec{
-						Queue: "c1",
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "pg2",
-						Namespace: "c2",
-					},
-					Spec: kbv1.PodGroupSpec{
-						Queue: "c2",
-					},
-				},
-			},
-
-			pods: []*v1.Pod{
-				// pending pod with owner1, under c1
-				util.BuildPod("c1", "p1", "", v1.PodPending, util.BuildResourceList("1", "1G"), "pg1", make(map[string]string), make(map[string]string)),
-				// pending pod with owner1, under c1
-				util.BuildPod("c1", "p2", "", v1.PodPending, util.BuildResourceList("1", "1G"), "pg1", make(map[string]string), make(map[string]string)),
-				// pending pod with owner2, under c2
-				util.BuildPod("c2", "p1", "", v1.PodPending, util.BuildResourceList("1", "1G"), "pg2", make(map[string]string), make(map[string]string)),
-				// pending pod with owner, under c2
-				util.BuildPod("c2", "p2", "", v1.PodPending, util.BuildResourceList("1", "1G"), "pg2", make(map[string]string), make(map[string]string)),
-			},
-			nodes: []*v1.Node{
-				util.BuildNode("n1", util.BuildResourceList("2", "4G"), make(map[string]string)),
-			},
-			queues: []*kbv1.Queue{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "c1",
-					},
-					Spec: kbv1.QueueSpec{
-						Weight: 1,
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "c2",
-					},
-					Spec: kbv1.QueueSpec{
-						Weight: 1,
-					},
-				},
-			},
-			expected: map[string]string{
-				"c2/p1": "n1",
-				"c1/p1": "n1",
-			},
-		},
+		//{
+		//	name: "two Jobs on one node",
+		//	podGroups: []*kbv1.PodGroup{
+		//		{
+		//			ObjectMeta: metav1.ObjectMeta{
+		//				Name:      "pg1",
+		//				Namespace: "c1",
+		//			},
+		//			Spec: kbv1.PodGroupSpec{
+		//				Queue: "c1",
+		//			},
+		//		},
+		//		{
+		//			ObjectMeta: metav1.ObjectMeta{
+		//				Name:      "pg2",
+		//				Namespace: "c2",
+		//			},
+		//			Spec: kbv1.PodGroupSpec{
+		//				Queue: "c2",
+		//			},
+		//		},
+		//	},
+		//
+		//	pods: []*v1.Pod{
+		//		// pending pod with owner1, under c1
+		//		util.BuildPod("c1", "p1", "", v1.PodPending, util.BuildResourceList("1", "1G"), "pg1", make(map[string]string), make(map[string]string)),
+		//		// pending pod with owner1, under c1
+		//		util.BuildPod("c1", "p2", "", v1.PodPending, util.BuildResourceList("1", "1G"), "pg1", make(map[string]string), make(map[string]string)),
+		//		// pending pod with owner2, under c2
+		//		util.BuildPod("c2", "p1", "", v1.PodPending, util.BuildResourceList("1", "1G"), "pg2", make(map[string]string), make(map[string]string)),
+		//		// pending pod with owner, under c2
+		//		util.BuildPod("c2", "p2", "", v1.PodPending, util.BuildResourceList("1", "1G"), "pg2", make(map[string]string), make(map[string]string)),
+		//	},
+		//	nodes: []*v1.Node{
+		//		util.BuildNode("n1", util.BuildResourceList("2", "4G"), make(map[string]string)),
+		//	},
+		//	queues: []*kbv1.Queue{
+		//		{
+		//			ObjectMeta: metav1.ObjectMeta{
+		//				Name: "c1",
+		//			},
+		//			Spec: kbv1.QueueSpec{
+		//				Weight: 1,
+		//			},
+		//		},
+		//		{
+		//			ObjectMeta: metav1.ObjectMeta{
+		//				Name: "c2",
+		//			},
+		//			Spec: kbv1.QueueSpec{
+		//				Weight: 1,
+		//			},
+		//		},
+		//	},
+		//	expected: map[string]string{
+		//		"c2/p1": "n1",
+		//		"c1/p1": "n1",
+		//	},
+		//},
 	}
 
 	allocate := New()
@@ -161,11 +165,15 @@ func TestAllocate(t *testing.T) {
 
 			Recorder: record.NewFakeRecorder(100),
 		}
-		for _, node := range test.nodes {
-			schedulerCache.AddNode(node)
+		podnum:=int(500)
+		nodenum:=int(5000)
+		for i=0;i<nodenum;i++{
+			n:=util.BuildNode("n"+strconv.Itoa(i), util.BuildResourceList("64", "128Gi"), make(map[string]string))
+			schedulerCache.AddNode(n)
 		}
-		for _, pod := range test.pods {
-			schedulerCache.AddPod(pod)
+		for i=0;i<podnum;i++{
+			p:=util.BuildPod("c1", "p"+strconv.Itoa(i), "", v1.PodPending, util.BuildResourceList("4", "4G"), "pg1", make(map[string]string), make(map[string]string))
+			schedulerCache.AddPod(p)
 		}
 
 		for _, ss := range test.podGroups {
@@ -177,6 +185,7 @@ func TestAllocate(t *testing.T) {
 		}
 
 		trueValue := true
+		begin:=time.Now()
 		ssn := framework.OpenSession(schedulerCache, []conf.Tier{
 			{
 				Plugins: []conf.PluginOption{
@@ -190,14 +199,21 @@ func TestAllocate(t *testing.T) {
 						EnabledQueueOrder:  &trueValue,
 						EnabledReclaimable: &trueValue,
 					},
+					{
+						Name:               "gang",
+						EnabledPreemptable: &trueValue,
+						EnabledJobOrder:    &trueValue,
+						EnabledJobReady:    &trueValue,
+					},
 				},
 			},
 		})
 		defer framework.CloseSession(ssn)
 
 		allocate.Execute(ssn)
-
-		for i := 0; i < len(test.expected); i++ {
+		glog.V(1).Infof("%s allocate end ...",time.Now().Sub(begin))
+		glog.Flush()
+		for i := 0; i < podnum; i++ {
 			select {
 			case <-binder.Channel:
 			case <-time.After(3 * time.Second):
@@ -205,8 +221,13 @@ func TestAllocate(t *testing.T) {
 			}
 		}
 
-		if !reflect.DeepEqual(test.expected, binder.Binds) {
-			t.Errorf("case %d (%s): expected: %v, got %v ", i, test.name, test.expected, binder.Binds)
+		if len(binder.Binds)==podnum{
+			glog.V(1).Infof("test OK")
+			glog.Flush()
 		}
+		//
+		//if !reflect.DeepEqual(test.expected, binder.Binds) {
+		//	t.Errorf("case %d (%s): expected: %v, got %v ", i, test.name, test.expected, binder.Binds)
+		//}
 	}
 }

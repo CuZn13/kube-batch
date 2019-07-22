@@ -24,6 +24,7 @@ import (
 	"github.com/kubernetes-sigs/kube-batch/pkg/scheduler/api"
 	"github.com/kubernetes-sigs/kube-batch/pkg/scheduler/framework"
 	"github.com/kubernetes-sigs/kube-batch/pkg/scheduler/util"
+	"time"
 )
 
 type allocateAction struct {
@@ -41,6 +42,7 @@ func (alloc *allocateAction) Name() string {
 func (alloc *allocateAction) Initialize() {}
 
 func (alloc *allocateAction) Execute(ssn *framework.Session) {
+
 	glog.V(3).Infof("Enter Allocate ...")
 	defer glog.V(3).Infof("Leaving Allocate ...")
 
@@ -87,6 +89,7 @@ func (alloc *allocateAction) Execute(ssn *framework.Session) {
 	}
 
 	for {
+
 		if queues.Empty() {
 			break
 		}
@@ -127,6 +130,7 @@ func (alloc *allocateAction) Execute(ssn *framework.Session) {
 			tasks.Len(), job.Namespace, job.Name)
 
 		for !tasks.Empty() {
+			begin:=time.Now()
 			task := tasks.Pop().(*api.TaskInfo)
 
 			glog.V(3).Infof("There are <%d> nodes for Job <%v/%v>",
@@ -139,15 +143,17 @@ func (alloc *allocateAction) Execute(ssn *framework.Session) {
 			if len(job.NodesFitDelta) > 0 {
 				job.NodesFitDelta = make(api.NodeResourceMap)
 			}
-
+			predicateBegin:=time.Now()
 			predicateNodes := util.PredicateNodes(task, allNodes, predicateFn)
+			glog.V(1).Infof("predicateNodes %s",time.Now().Sub(predicateBegin))
 			if len(predicateNodes) == 0 {
 				// Further Tasks should be checked because tasks are ordered in priority, so it affects taskPriority within Job,
 				// so if one task fails predicates, it should not check further tasks in same job, should skip to next job.
 				break
 			}
-
+			prioritizeBegin:=time.Now()
 			priorityList, err := util.PrioritizeNodes(task, predicateNodes, ssn.NodePrioritizers())
+			glog.V(1).Infof("PrioritizeNodes %s",time.Now().Sub(prioritizeBegin))
 			if err != nil {
 				glog.Errorf("Prioritize Nodes for task %s err: %v", task.UID, err)
 				break
@@ -186,11 +192,14 @@ func (alloc *allocateAction) Execute(ssn *framework.Session) {
 				jobs.Push(job)
 				break
 			}
+			glog.V(1).Infof("%s Allocate ...",time.Now().Sub(begin))
 		}
 
 		// Added Queue back until no job in Queue.
 		queues.Push(queue)
+
 	}
+
 }
 
 func (alloc *allocateAction) UnInitialize() {}
